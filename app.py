@@ -28,11 +28,6 @@ else:
 
 cumulative_days = st.sidebar.slider("累積日数（連続下落を何日まで合算）", 1, 10, 3)
 
-lev_excess = st.sidebar.number_input(
-    "1570の超過下落倍率（理論2倍超え）",
-    min_value=1.0, max_value=5.0, value=2.0, step=0.1, format="%.1f",
-    help="1570の下落率が日経の何倍以上で乖離とみなすか（通常2倍が理論値）"
-)
 
 start_date = st.sidebar.date_input("開始日", value=datetime(2020, 1, 1))
 
@@ -83,7 +78,8 @@ if mode == "円モード":
 else:
     cond_nikkei = df["N225_cum_ret"] <= -threshold
 
-cond_lev = df["LEV_ret"] <= (df["N225_ret"] * lev_excess)
+# 1570終値 ＜ 日経平均終値
+cond_lev = df["LEV"] < df["N225"]
 
 df["signal"] = cond_nikkei & cond_lev & (df["N225_ret"] < 0)
 
