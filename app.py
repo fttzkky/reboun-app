@@ -47,7 +47,6 @@ def load_data(start):
     end = datetime.today().strftime("%Y-%m-%d")
     n225_raw = yf.download("^N225", start=start, end=end, progress=False)["Close"]
     lev_raw  = yf.download("1570.T", start=start, end=end, progress=False)["Close"]
-    # yfinance may return DataFrame with MultiIndex columns; squeeze to Series
     if isinstance(n225_raw, pd.DataFrame):
         n225_raw = n225_raw.squeeze()
     if isinstance(lev_raw, pd.DataFrame):
@@ -139,10 +138,8 @@ if returns:
             return "color: red" if v < 0 else "color: blue"
         except: return ""
 
-    st.dataframe(
-        result_df.style.applymap(color_ret, subset=["翌日1570%","3日後1570%","5日後1570%"]),
-        use_container_width=True, hide_index=True
-    )
+    styled = result_df.style.map(color_ret, subset=["翌日1570%","3日後1570%","5日後1570%"])
+    st.dataframe(styled, use_container_width=True, hide_index=True)
 else:
     st.warning("条件に合うシグナルが見つかりませんでした。閾値を下げてみてください。")
 
@@ -163,6 +160,6 @@ if len(signals) > 0:
     detail = signals[["N225_diff","N225_cum_diff","N225_ret","LEV_ret","LEV_theory","LEV_excess"]].copy()
     detail.columns = ["日経日次(円)","日経累積(円)","日経日次(%)","1570実際(%)","1570理論(%)","乖離(%)"]
     detail.index = detail.index.date
-    st.dataframe(detail.style.applymap(
+    st.dataframe(detail.style.map(
         lambda v: "color: red" if isinstance(v, float) and v < 0 else "color: blue" if isinstance(v, float) and v > 0 else ""
     ), use_container_width=True)
