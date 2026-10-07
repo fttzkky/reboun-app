@@ -45,9 +45,14 @@ st.sidebar.markdown("[ひよこ式](https://choruko-swing-anvaomt9aunocm5irspcob
 @st.cache_data(ttl=3600)
 def load_data(start):
     end = datetime.today().strftime("%Y-%m-%d")
-    n225 = yf.download("^N225", start=start, end=end, progress=False)["Close"]
-    lev  = yf.download("1570.T", start=start, end=end, progress=False)["Close"]
-    df = pd.DataFrame({"N225": n225, "LEV": lev}).dropna()
+    n225_raw = yf.download("^N225", start=start, end=end, progress=False)["Close"]
+    lev_raw  = yf.download("1570.T", start=start, end=end, progress=False)["Close"]
+    # yfinance may return DataFrame with MultiIndex columns; squeeze to Series
+    if isinstance(n225_raw, pd.DataFrame):
+        n225_raw = n225_raw.squeeze()
+    if isinstance(lev_raw, pd.DataFrame):
+        lev_raw = lev_raw.squeeze()
+    df = pd.DataFrame({"N225": n225_raw, "LEV": lev_raw}).dropna()
     df.index = pd.to_datetime(df.index)
     return df
 
