@@ -283,6 +283,61 @@ else:
         st.dataframe(trades.style.map(color_pl, subset=["ETF損益(%)", "最大含み損(%)"]),
                      use_container_width=True, hide_index=True)
 
+# --- 月火続落 → 火曜終値で買い → 木曜終値で売り ---
+st.markdown("---")
+st.subheader("📅 月火続落 → 火曜終値で買い → 木曜終値で売り")
+st.caption("買い条件タブの設定とは別に、選択中のETF・開始日で計算します。"
+           "月曜と火曜の日経平均がどちらも前日比マイナス（指定した下げ幅以上）の週だけ、"
+           "火曜の終値で買い、同じ週の木曜の終値で売ります。祝日などで月・火・木のどれかが休場の週は除きます。")
+day_drop = st.number_input("月・火それぞれの日経平均の下げ幅（%以上）", min_value=0.0, max_value=5.0,
+                           value=0.0, step=0.1, format="%.1f")
+
+
+def weekly_test(frame, need_drop):
+    pos = {d: i for i, d in enumerate(frame.index)}
+    n_ret = frame["N225_ret"].values
+    lev = frame["LEV"].values
+    rows = []
+    for d in frame.index[frame.index.dayofweek == 1]:
+        mon, thu, wed = d - pd.Timedelta(days=1), d + pd.Timedelta(days=2), d + pd.Timedelta(days=1)
+        if mon not in pos or thu not in pos:
+            continue
+        i, j = pos[d], pos[thu]
+        cond = (n_ret[pos[mon]] < 0 and n_ret[i] < 0
+                and n_ret[pos[mon]] <= -need_drop and n_ret[i] <= -need_drop)
+        wed_up = (n_ret[pos[wed]] > 0) if wed in pos else None
+        path = lev[i + 1: j + 1] / lev[i] - 1
+        rows.append({"買い日": d.date(), "月火続落": bool(cond), "水曜の日経": wed_up,
+                     "ETF損益(%)": round((lev[j] / lev[i] - 1) * 100, 2),
+                     "最大含み損(%)": round(min(path.min(), 0) * 100, 2)})
+    return pd.DataFrame(rows)
+
+
+def weekly_summary(part):
+    if len(part) == 0:
+        return {"件数": 0, "勝率": None, "平均損益": None, "最悪含み損": None}
+    return {"件数": len(part), "勝率": round((part["ETF損益(%)"] > 0).mean() * 100, 1),
+            "平均損益": round(part["ETF損益(%)"].mean(), 2), "最悪含み損": part["最大含み損(%)"].min()}
+
+
+wk = weekly_test(df, day_drop)
+if len(wk) == 0:
+    st.info("該当する週がありません（月・火・木がそろう週が必要です）。")
+else:
+    hit = wk[wk["月火続落"]]
+    wed_label = {True: "水曜に日経が上昇", False: "水曜に日経が下落"}
+    summary = {"月火続落の週": weekly_summary(hit),
+               "（比較）すべての火曜買い": weekly_summary(wk)}
+    for flag, label in wed_label.items():
+        summary[f"　└ 続落の週のうち{label}"] = weekly_summary(hit[hit["水曜の日経"] == flag])
+    summary_df = pd.DataFrame(summary).T
+    summary_df["件数"] = summary_df["件数"].astype(int)
+    st.dataframe(summary_df, use_container_width=True)
+    st.caption("「水曜に日経が上昇」は、買った後の結果を見て分けた内訳です。買う時点では分からないので、"
+               "条件としては使えません。続落の週が少ないと、勝率は偶然でぶれます。")
+    with st.expander("該当した週の一覧"):
+        st.dataframe(hit.drop(columns=["月火続落"]), use_container_width=True, hide_index=True)
+
 st.markdown("---")
 
 # --- 翌日・3日後・5日後リターン計算 ---
