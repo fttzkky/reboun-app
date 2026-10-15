@@ -261,6 +261,18 @@ else:
         )
         st.dataframe(yearly, use_container_width=True)
 
+        st.markdown("**買い日の曜日別**")
+        weekday_names = dict(enumerate("月火水木金土日"))
+        tmp["曜日"] = pd.to_datetime(tmp["買い日"]).dt.dayofweek.map(weekday_names)
+        weekday = tmp.groupby("曜日").agg(
+            件数=("ETF損益(%)", "size"),
+            勝率=("ETF損益(%)", lambda s: round((s > 0).mean() * 100, 1)),
+            平均損益=("ETF損益(%)", lambda s: round(s.mean(), 2)),
+            最悪含み損=("最大含み損(%)", "min"),
+        ).reindex([d for d in "月火水木金" if d in set(tmp["曜日"])])
+        st.dataframe(weekday, use_container_width=True)
+        st.caption("曜日ごとの件数が少ないと、勝率は偶然で大きくぶれます。件数も合わせて見てください。")
+
     with st.expander("取引一覧"):
         def color_pl(val):
             try:
