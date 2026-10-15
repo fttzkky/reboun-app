@@ -59,6 +59,12 @@ target_yen = st.sidebar.number_input(
 max_hold = st.sidebar.slider("最大保有日数（超えたらその日の終値で売る）", 1, 60, 20)
 
 st.sidebar.markdown("---")
+if st.sidebar.button("🔄 最新データで再計算", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
+st.sidebar.caption("設定を変えると自動で再計算します。このボタンは株価データを取り直します。")
+
+st.sidebar.markdown("---")
 st.sidebar.markdown("**両アプリURL**")
 st.sidebar.markdown("[ちょる子式](https://choruko-swing-dwf39ocwzqubb3uattpjmi.streamlit.app)")
 st.sidebar.markdown("[ひよこ式](https://choruko-swing-anvaomt9aunocm5irspcob.streamlit.app)")
