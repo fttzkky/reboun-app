@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import time
 from datetime import datetime, date, timedelta
 
 st.set_page_config(page_title="レバウン式", page_icon="📈", layout="wide")
@@ -64,19 +65,40 @@ st.sidebar.markdown("[ひよこ式](https://choruko-swing-anvaomt9aunocm5irspcob
 
 
 # --- データ取得 ---
+def _fetch_close(symbol, start, end, tries=3):
+    """終値を取得。失敗・空なら待って再試行し、download→Ticker.historyの順で切り替える。"""
+    last_err = None
+    for i in range(tries):
+        for method in ("download", "history"):
+            try:
+                if method == "download":
+                    raw = yf.download(symbol, start=start, end=end, progress=False)["Close"]
+                else:
+                    raw = yf.Ticker(symbol).history(start=start, end=end, auto_adjust=True)["Close"]
+                if isinstance(raw, pd.DataFrame):
+                    raw = raw.squeeze()
+                if isinstance(raw, pd.Series) and raw.dropna().size > 0:
+                    idx = pd.to_datetime(raw.index)
+                    if idx.tz is not None:
+                        idx = idx.tz_localize(None)
+                    raw.index = idx.normalize()
+                    return raw.dropna()
+            except Exception as e:
+                last_err = e
+        time.sleep(2 * (i + 1))
+    raise RuntimeError(f"{symbol} の株価を取得できませんでした（{tries}回再試行）: {last_err}")
+
+
 @st.cache_data(ttl=3600)
 def load_data(tkr, start):
     # 指標計算用に開始日の約半年前から取得し、後で開始日以降に絞る
     buffer_start = (pd.Timestamp(start) - pd.Timedelta(days=200)).strftime("%Y-%m-%d")
     end = datetime.today().strftime("%Y-%m-%d")
-    n225_raw = yf.download("^N225", start=buffer_start, end=end, progress=False)["Close"]
-    lev_raw  = yf.download(tkr, start=buffer_start, end=end, progress=False)["Close"]
-    if isinstance(n225_raw, pd.DataFrame):
-        n225_raw = n225_raw.squeeze()
-    if isinstance(lev_raw, pd.DataFrame):
-        lev_raw = lev_raw.squeeze()
+    n225_raw = _fetch_close("^N225", buffer_start, end)
+    lev_raw  = _fetch_close(tkr, buffer_start, end)
     df = pd.DataFrame({"N225": n225_raw, "LEV": lev_raw}).dropna()
-    df.index = pd.to_datetime(df.index)
+    if df.empty:
+        raise RuntimeError("日経平均とETFの取引日が重なるデータがありませんでした。")
     return df
 
 
@@ -92,6 +114,10 @@ with st.spinner("データ取得中..."):
         df = load_data(ticker, start_date.strftime("%Y-%m-%d"))
     except Exception as e:
         st.error(f"データ取得エラー: {e}")
+        st.info("Yahoo側の混雑が原因のことが多いです。数分おいて、下のボタンで再取得できます。")
+        if st.button("再取得する"):
+            st.cache_data.clear()
+            st.rerun()
         st.stop()
 
 if df.empty:
