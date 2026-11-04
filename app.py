@@ -65,7 +65,8 @@ if st.sidebar.button("🔄 最新データで再計算", use_container_width=Tru
 st.sidebar.caption("設定を変えると自動で再計算します。このボタンは株価データを取り直します。")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**両アプリURL**")
+st.sidebar.markdown("**アプリ一覧**")
+st.sidebar.markdown("[レバウン式（このアプリ）](https://reboun-app-fqpqv4e5nqdkqy3tibcxqn.streamlit.app/)")
 st.sidebar.markdown("[ちょる子式](https://choruko-swing-dwf39ocwzqubb3uattpjmi.streamlit.app)")
 st.sidebar.markdown("[ひよこ式](https://choruko-swing-anvaomt9aunocm5irspcob.streamlit.app)")
 
