@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import time
+import dca
 from datetime import datetime, date, timedelta
 
 st.set_page_config(page_title="レバウン式", page_icon="📈", layout="wide")
@@ -407,5 +408,62 @@ if len(signals) > 0 and is_1570:
     st.dataframe(detail.style.map(
         lambda v: "color: red" if isinstance(v, float) and v < 0 else "color: blue" if isinstance(v, float) and v > 0 else ""
     ), use_container_width=True)
+
+
+# --- 4.3ブル 積立シミュレーション（理論値） ---
+st.markdown("---")
+st.subheader("💰 4.3ブル 積立シミュレーション（理論値）")
+st.caption(
+    "日経平均の終値×倍率、信託報酬を引いて作った、基準価額の理論値です。実際の基準価額とは、ずれます"
+    "（先物の評価時点、売買のコストなどは含みません）。毎月の最初の営業日に積み立て、含み益が指定額に"
+    "なったら、その日に全部売り、また積み立てを続けます。"
+)
+sc1, sc2, sc3 = st.columns(3)
+dca_monthly = sc1.number_input("毎月の積立額（円）", min_value=10_000, max_value=1_000_000, value=100_000, step=10_000)
+dca_target  = sc2.number_input("売る含み益（円）", min_value=100_000, max_value=10_000_000, value=1_200_000, step=100_000)
+dca_year    = sc3.number_input("積立の開始年", min_value=2018, max_value=2026, value=2021, step=1)
+sc4, sc5, sc6 = st.columns(3)
+dca_fee = sc4.number_input("信託報酬（年率%）", min_value=0.0, max_value=3.0, value=0.968, step=0.001, format="%.3f")
+dca_tax = sc5.number_input("税率（%）", min_value=0.0, max_value=30.0, value=20.315, step=0.001, format="%.3f")
+dca_lev = sc6.number_input("倍率", min_value=1.0, max_value=10.0, value=4.3, step=0.1)
+
+
+@st.cache_data(ttl=3600)
+def load_n225_long(year):
+    end = datetime.today().strftime("%Y-%m-%d")
+    return _fetch_close("^N225", f"{year - 1}-12-01", end)
+
+
+try:
+    n225_long = load_n225_long(int(dca_year))
+    n225_long = n225_long[n225_long.index >= pd.Timestamp(f"{int(dca_year)}-01-01")]
+except Exception as e:
+    n225_long = None
+    st.error(f"日経平均のデータを取得できませんでした: {e}")
+
+if n225_long is not None and len(n225_long) > 30:
+    nav_t = dca.theoretical_nav(n225_long, leverage=dca_lev, fee_yearly=dca_fee / 100)
+    res = dca.simulate(nav_t, monthly=dca_monthly, target=dca_target, tax=dca_tax / 100)
+    hold = dca.simulate(nav_t, monthly=dca_monthly, target=dca_target, tax=dca_tax / 100, sell=False)
+    hold_gain = hold["hold_value"] - hold["hold_cost"]
+    hold_net = hold["hold_value"] - max(hold_gain, 0) * dca_tax / 100
+    wealth_gain = res["total_wealth"] - res["contributed"]
+
+    st.markdown(f"**期間：{n225_long.index[0].date()} 〜 {n225_long.index[-1].date()}　／　基準価額（理論値）：{nav_t.iloc[-1]:,.0f}円**")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("総積立額", f"{res['contributed']:,.0f}円")
+    m2.metric("売却した回数", f"{len(res['sells'])}回")
+    m3.metric("売却の手取り合計（税引後）", f"{res['cash_net']:,.0f}円")
+    m4.metric("今の保有の評価額", f"{res['hold_value']:,.0f}円",
+              f"取得額 {res['hold_cost']:,.0f}円")
+    m5, m6 = st.columns(2)
+    m5.metric("合計（手取り＋保有の評価額）", f"{res['total_wealth']:,.0f}円", f"{wealth_gain:+,.0f}円（積立額との差）")
+    m6.metric("（比較）売らずに持ち続けた場合", f"{hold_net:,.0f}円（税引後）",
+              f"{hold_net - hold['contributed']:+,.0f}円（積立額との差）")
+    if len(res["sells"]) > 0:
+        st.markdown("**売却の一覧**")
+        st.dataframe(res["sells"], use_container_width=True, hide_index=True)
+    else:
+        st.info("この期間では、指定した含み益に届いた売却は、ありませんでした。")
 
 st.caption("⚠️ 投資判断はご自身の責任で。過去の結果は将来の成績を保証しません。")
