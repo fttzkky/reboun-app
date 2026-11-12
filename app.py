@@ -466,4 +466,47 @@ if n225_long is not None and len(n225_long) > 30:
     else:
         st.info("この期間では、指定した含み益に届いた売却は、ありませんでした。")
 
+
+# --- 売る基準価額の計算（画面の数字を入れると、正確に出る） ---
+st.markdown("---")
+st.subheader("🧮 売る基準価額の計算（4.3ブルなど）")
+st.caption("証券会社の画面の数字を、そのまま入れてください。平均取得単価の方式で、税金を含めて、正確に計算します（概算ではありません）。")
+rc1, rc2, rc3 = st.columns(3)
+rq_units = rc1.number_input("保有口数（口）", min_value=0, value=0, step=1000,
+                            help="約定履歴の「約定数量」の合計。または、保有金額÷基準価額×1万", key="rq_units")
+rq_cost  = rc2.number_input("平均取得単価（円／1万口）", min_value=0.0, value=0.0, step=1.0, format="%.0f",
+                            help="保有銘柄の画面の「取得単価」", key="rq_cost")
+rq_nav   = rc3.number_input("今の基準価額（円／1万口）", min_value=0.0, value=0.0, step=1.0, format="%.0f", key="rq_nav")
+rc4, rc5, rc6 = st.columns(3)
+rq_keep   = rc4.number_input("残す口数（口）", min_value=0, value=10_000, step=1000, key="rq_keep")
+rq_target = rc5.number_input("目標の利益（税引後、円）", min_value=0, value=20_000, step=10_000, key="rq_target")
+rq_tax    = rc6.number_input("税率（%）", min_value=0.0, max_value=30.0, value=20.315, step=0.001, format="%.3f", key="rq_tax")
+
+if rq_units > 0 and rq_cost > 0:
+    t_ = rq_tax / 100
+    total_cost = rq_units * rq_cost / 10_000
+    st.markdown(f"**総コスト：{total_cost:,.0f}円　／　元に戻る基準価額（税金なし）：{rq_cost:,.0f}円**")
+    if rq_nav > 0:
+        value_now = rq_units * rq_nav / 10_000
+        rv1, rv2, rv3 = st.columns(3)
+        rv1.metric("今の評価額", f"{value_now:,.0f}円")
+        rv2.metric("含み損益", f"{value_now - total_cost:+,.0f}円")
+        rv3.metric("取得単価までの変化率", f"{(rq_cost / rq_nav - 1) * 100:+.1f}%")
+    rows = []
+    for keep in sorted({0, 1_000, 5_000, 10_000, 30_000, int(rq_keep)}):
+        if keep >= rq_units:
+            continue
+        p = dca.required_nav(rq_units, rq_cost, keep, rq_target, t_)
+        net, tax_amt, proceeds = dca.net_cash(rq_units, rq_cost, keep, p, t_)
+        row = {"残す口数": keep, "売る口数": rq_units - keep, "売る基準価額": round(p),
+               "売却額": round(proceeds), "税額": round(tax_amt), "手取り": round(net),
+               "残した分の評価額": round(keep * p / 10_000)}
+        if rq_nav > 0:
+            row["今から必要な上昇率(%)"] = round((p / rq_nav - 1) * 100, 1)
+        rows.append(row)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.caption("「手取り」は、売って受け取る税引後の金額です。目標の利益は、全体の取得額に対して、手取りが何円上回るか、を指します。")
+else:
+    st.info("保有口数と、平均取得単価を入れると、計算結果が出ます。")
+
 st.caption("⚠️ 投資判断はご自身の責任で。過去の結果は将来の成績を保証しません。")
