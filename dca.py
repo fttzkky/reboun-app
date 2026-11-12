@@ -50,3 +50,29 @@ def simulate(nav, monthly=100_000, target=1_200_000, tax=0.20315, sell=True):
         "hold_cost": cost,
         "total_wealth": cash_net + hold_value,
     }
+
+
+def required_nav(units, avg_cost, keep_units=0, target_profit=20_000, tax=0.20315):
+    """売る基準価額を、正確に計算する（平均取得単価の方式）。
+    units: 保有口数、avg_cost: 平均取得単価（1万口あたりの円）、keep_units: 残す口数。
+    売った分の手取り（税引後）が、全体の取得額＋target_profit 以上になる、基準価額（1万口あたり）を返す。"""
+    sell = units - keep_units
+    if sell <= 0:
+        return None
+    total_cost = units * avg_cost / 10_000
+    sold_cost = sell * avg_cost / 10_000
+    # 利益が出る場合：売却額×(1−税率) ＋ 税率×売った分の取得額 ＝ 取得額＋目標
+    p_gain = 10_000 * (total_cost + target_profit - tax * sold_cost) / ((1 - tax) * sell)
+    if p_gain > avg_cost:
+        return p_gain
+    # 利益が出ない（税金がかからない）場合
+    return 10_000 * (total_cost + target_profit) / sell
+
+
+def net_cash(units, avg_cost, keep_units, nav, tax=0.20315):
+    """基準価額 nav で、keep_units を残して売った場合の、手取り（税引後）と税額を返す。"""
+    sell = units - keep_units
+    proceeds = sell * nav / 10_000
+    gain = proceeds - sell * avg_cost / 10_000
+    tax_amt = max(gain, 0) * tax
+    return proceeds - tax_amt, tax_amt, proceeds
